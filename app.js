@@ -56,7 +56,11 @@
   let cursor = new Date();       // anchors the visible month / week
   let selectedISO = todayISO();  // day shown in the detail sheet
   let editingId = null;          // event being edited, or null
+  let assigningId = null;        // task being scheduled in the week, or null
+  let pendingAnim = null;        // 'next' | 'prev' | 'fade' — one-shot view animation
   let deferredPrompt = null;     // PWA install prompt
+
+  const prefersReducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   function loadState() {
     try {
@@ -158,7 +162,23 @@
   }
   const tasksForISO = (iso) => state.tasks.filter((t) => t.date === iso);
   const backlogTasks = () => state.tasks.filter((t) => !t.date);
-  const datedTasks = () => state.tasks.filter((t) => t.date).sort((a, b) => a.date.localeCompare(b.date));
+  const datedTasks = () => state.tasks.filter((t) => t.date).sort((a, b) =>
+    a.date === b.date ? (a.start || '~').localeCompare(b.start || '~') : a.date.localeCompare(b.date));
+  const withinWeek = (iso, weekStart) => iso >= toISO(weekStart) && iso <= toISO(addDays(weekStart, 6));
+
+  // Combined, time-sorted list of events + tasks for one day (used by the week agenda).
+  function dayAgenda(iso) {
+    const items = [];
+    eventsForISO(iso).forEach((e) => items.push({ kind: 'event', start: e.start || '', ref: e }));
+    tasksForISO(iso).forEach((t) => items.push({ kind: 'task', start: t.start || '', ref: t }));
+    items.sort((a, b) => {
+      if (!a.start && b.start) return -1;
+      if (a.start && !b.start) return 1;
+      if (!a.start && !b.start) return a.kind === b.kind ? 0 : (a.kind === 'event' ? -1 : 1);
+      return a.start.localeCompare(b.start);
+    });
+    return items;
+  }
 
   /* ------------------------------ DOM refs ----------------------------- */
   const $ = (id) => document.getElementById(id);
@@ -170,6 +190,35 @@
     if (view === 'month') renderMonth();
     else if (view === 'week') renderWeek();
     else renderTasks();
+    if (pendingAnim && !prefersReducedMotion()) {
+      viewEl.classList.remove('anim-next', 'anim-prev', 'anim-fade');
+      void viewEl.offsetWidth; // restart the animation
+      viewEl.classList.add('anim-' + pendingAnim);
+    }
+    pendingAnim = null;
+  }
+
+  function agendaRowHTML(item) {
+    if (item.kind === 'event') {
+      const e = item.ref;
+      return `<button class="agenda-item cat-${e.category}" data-edit="${e.id}">
+        ${timeRangeHTML(e)}
+        <span class="agenda-body">
+          <span class="agenda-title">${e.important ? '<span class="star">★</span> ' : ''}${esc(e.title)}</span>
+          ${e.notes ? `<span class="agenda-note">${esc(e.notes)}</span>` : ''}
+        </span>
+      </button>`;
+    }
+    const t = item.ref;
+    const time = t.start
+      ? `<span class="agenda-time">${esc(t.start)}${t.end ? `<span class="to">${esc(t.end)}</span>` : ''}</span>`
+      : '<span class="agenda-time">Tarea</span>';
+    return `<div class="agenda-item is-task ${t.done ? 'done' : ''}">
+      <input class="task-check" type="checkbox" data-toggle="${t.id}" ${t.done ? 'checked' : ''} aria-label="Completar tarea">
+      ${time}
+      <span class="agenda-body"><span class="agenda-title">${esc(t.title)}</span></span>
+      <button class="link-btn" data-assign="${t.id}" aria-label="Reprogramar tarea">Cambiar</button>
+    </div>`;
   }
 
   function timeRangeHTML(e) {
@@ -223,28 +272,29 @@
 
     const tIso = todayISO();
     let html = '';
+
+    // Tray of unscheduled tasks: drag onto a day, or tap to pick day + time.
+    const tray = backlogTasks();
+    if (tray.length) {
+      html += `<div class="task-tray">
+        <div class="tray-head">🗂️ Tareas sin agendar <span class="tray-hint">arrastrá o tocá una para ponerle día y hora</span></div>
+        <div class="tray-chips">${tray.map((t) =>
+          `<button class="task-chip ${t.priority === 'alta' ? 'prio-alta' : ''}" draggable="true" data-chip="${t.id}">${esc(t.title)}</button>`).join('')}</div>
+      </div>`;
+    }
+
     for (let i = 0; i < 7; i++) {
       const d = addDays(start, i);
       const iso = toISO(d);
-      const evs = eventsForISO(iso);
-      const tks = tasksForISO(iso);
+      const items = dayAgenda(iso);
+      const rows = items.length
+        ? items.map(agendaRowHTML).join('')
+        : '<div class="empty">Sin actividades — bloque libre.</div>';
+      const today = iso === tIso;
 
-      let rows = '';
-      evs.forEach((e) => {
-        rows += `<button class="agenda-item cat-${e.category}" data-edit="${e.id}">
-          ${timeRangeHTML(e)}
-          <span class="agenda-body">
-            <span class="agenda-title">${e.important ? '<span class="star">★</span> ' : ''}${esc(e.title)}</span>
-            ${e.notes ? `<span class="agenda-note">${esc(e.notes)}</span>` : ''}
-          </span>
-        </button>`;
-      });
-      tks.forEach((t) => { rows += taskHTML(t); });
-      if (!rows) rows = '<div class="empty">Sin actividades — bloque libre.</div>';
-
-      html += `<section class="week-day ${iso === tIso ? 'today' : ''}">
+      html += `<section class="week-day ${today ? 'today' : ''}" data-drop="${iso}">
         <header class="wd-head" data-day="${iso}">
-          <div><span class="wd-name">${DOW_LONG[d.getDay()]}</span><span class="wd-num">${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}</span></div>
+          <div><span class="wd-name">${DOW_LONG[d.getDay()]}</span><span class="wd-num">${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}</span>${today ? '<span class="hoy-badge">HOY</span>' : ''}</div>
           <button class="mini-add" data-add="${iso}" aria-label="Agregar evento">+</button>
         </header>
         <div class="agenda">${rows}</div>
@@ -255,7 +305,7 @@
 
   function taskHTML(t) {
     const meta = [];
-    if (t.date) meta.push(shortDate(t.date));
+    if (t.date) meta.push(shortDate(t.date) + (t.start ? ` · ${esc(t.start)}${t.end ? '–' + esc(t.end) : ''}` : ''));
     if (t.priority === 'alta') meta.push('<span class="badge prio-alta">Prioridad alta</span>');
     else if (t.priority === 'baja') meta.push('<span class="badge prio-baja">Baja</span>');
     if (t.notes) meta.push(esc(t.notes));
@@ -416,7 +466,7 @@
   function addTask(title, dateISO) {
     title = (title || '').trim();
     if (!title) return false;
-    state.tasks.push({ id: uid(), title: title, date: dateISO || null, done: false, priority: 'normal', notes: '' });
+    state.tasks.push({ id: uid(), title: title, date: dateISO || null, start: null, end: null, done: false, priority: 'normal', notes: '' });
     saveState();
     return true;
   }
@@ -429,20 +479,84 @@
     saveState();
   }
 
+  /* ----------------- Assign a task to a day + time slot ---------------- */
+  function openAssign(taskId, presetISO) {
+    const t = state.tasks.find((x) => x.id === taskId);
+    if (!t) return;
+    assigningId = taskId;
+    $('assignTitle').textContent = t.title;
+
+    let weekStart = startOfWeekMon(cursor);
+    let target = presetISO
+      || (t.date && withinWeek(t.date, weekStart) ? t.date : null)
+      || (withinWeek(todayISO(), weekStart) ? todayISO() : toISO(weekStart));
+    if (!withinWeek(target, weekStart)) { cursor = parseISO(target); weekStart = startOfWeekMon(cursor); }
+
+    let out = '';
+    const labels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(weekStart, i);
+      const iso = toISO(d);
+      out += `<button type="button" class="wday ${iso === target ? 'on' : ''}" data-aday="${iso}">${labels[i]}<small>${d.getDate()}</small></button>`;
+    }
+    $('assignDays').innerHTML = out;
+    $('assignStart').value = t.start || '';
+    $('assignEnd').value = t.end || '';
+    $('assignRemove').hidden = !t.date;
+    showOverlay('assignDialog');
+  }
+  function confirmAssign() {
+    const t = state.tasks.find((x) => x.id === assigningId);
+    if (!t) return;
+    const sel = $('assignDays').querySelector('.wday.on');
+    if (!sel) { toast('Elegí un día'); return; }
+    t.date = sel.dataset.aday;
+    t.start = $('assignStart').value || null;
+    t.end = $('assignEnd').value || null;
+    saveState();
+    hideOverlay('assignDialog');
+    cursor = parseISO(t.date);
+    view = 'week';
+    pendingAnim = 'fade';
+    render();
+    toast('Tarea agendada 📌');
+  }
+  function removeAssign() {
+    const t = state.tasks.find((x) => x.id === assigningId);
+    if (!t) return;
+    t.date = null; t.start = null; t.end = null;
+    saveState();
+    hideOverlay('assignDialog');
+    render();
+    toast('Tarea devuelta a sin agendar');
+  }
+
   /* ------------------------------ Overlays ----------------------------- */
+  const OVERLAYS = ['sheet', 'editor', 'assignDialog'];
+  const anyOverlayOpen = () => OVERLAYS.some((id) => !$(id).classList.contains('hidden'));
+
   function showOverlay(id) {
     const el = $(id);
-    el.classList.remove('hidden');
+    el.classList.remove('hidden', 'closing');
     el.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
   }
   function hideOverlay(id) {
     const el = $(id);
-    el.classList.add('hidden');
-    el.setAttribute('aria-hidden', 'true');
-    if ($('sheet').classList.contains('hidden') && $('editor').classList.contains('hidden')) {
-      document.body.style.overflow = '';
-    }
+    if (el.classList.contains('hidden')) return;
+    const finish = () => {
+      el.classList.add('hidden');
+      el.classList.remove('closing');
+      el.setAttribute('aria-hidden', 'true');
+      if (!anyOverlayOpen()) document.body.style.overflow = '';
+    };
+    if (prefersReducedMotion()) { finish(); return; }
+    const card = el.querySelector('.sheet-card');
+    el.classList.add('closing');
+    let done = false;
+    const onEnd = () => { if (done) return; done = true; if (card) card.removeEventListener('animationend', onEnd); finish(); };
+    if (card) card.addEventListener('animationend', onEnd);
+    setTimeout(onEnd, 360); // fallback if animationend doesn't fire
   }
 
   /* ------------------------------- Toast ------------------------------- */
@@ -460,14 +574,17 @@
     if (view === 'month') cursor = new Date(cursor.getFullYear(), cursor.getMonth() + dir, 1);
     else if (view === 'week') cursor = addDays(cursor, dir * 7);
     else return;
+    pendingAnim = dir > 0 ? 'next' : 'prev';
     render();
   }
   function goToday() {
     cursor = new Date();
     selectedISO = todayISO();
+    pendingAnim = 'fade';
     render();
   }
   function setView(v) {
+    if (v !== view) pendingAnim = 'fade';
     view = v;
     render();
   }
@@ -500,6 +617,8 @@
       const delT = e.target.closest('[data-deltask]');
       const addBl = e.target.closest('[data-addbacklog]');
       const reset = e.target.closest('[data-reset]');
+      const chip = e.target.closest('[data-chip]');
+      const assign = e.target.closest('[data-assign]');
 
       if (edit) { const ev = state.events.find((x) => x.id === edit.dataset.edit); if (ev) openEditor(ev); return; }
       if (add) { selectedISO = add.dataset.add; openEditor(null, add.dataset.add); return; }
@@ -509,6 +628,8 @@
         if (inp && addTask(inp.value, null)) { inp.value = ''; render(); toast('Tarea agregada'); }
         return;
       }
+      if (chip) { openAssign(chip.dataset.chip, null); return; }
+      if (assign) { openAssign(assign.dataset.assign, null); return; }
       if (reset) { resetData(); return; }
       if (cell) { openSheet(cell.dataset.day); return; }
     });
@@ -521,6 +642,39 @@
       if (e.key === 'Enter' && e.target.id === 'addBacklog') {
         if (addTask(e.target.value, null)) { e.target.value = ''; render(); toast('Tarea agregada'); }
       }
+    });
+
+    // Drag & drop: tray task chips → day cards (pointer/mouse; touch uses tap-to-assign).
+    viewEl.addEventListener('dragstart', (e) => {
+      const c = e.target.closest('[data-chip]');
+      if (!c) return;
+      e.dataTransfer.setData('text/plain', c.dataset.chip);
+      e.dataTransfer.effectAllowed = 'move';
+      c.classList.add('dragging');
+    });
+    viewEl.addEventListener('dragend', (e) => {
+      const c = e.target.closest('[data-chip]');
+      if (c) c.classList.remove('dragging');
+      document.querySelectorAll('.drop-active').forEach((x) => x.classList.remove('drop-active'));
+    });
+    viewEl.addEventListener('dragover', (e) => {
+      const d = e.target.closest('[data-drop]');
+      if (!d) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      d.classList.add('drop-active');
+    });
+    viewEl.addEventListener('dragleave', (e) => {
+      const d = e.target.closest('[data-drop]');
+      if (d && !d.contains(e.relatedTarget)) d.classList.remove('drop-active');
+    });
+    viewEl.addEventListener('drop', (e) => {
+      const d = e.target.closest('[data-drop]');
+      if (!d) return;
+      e.preventDefault();
+      d.classList.remove('drop-active');
+      const id = e.dataTransfer.getData('text/plain');
+      if (id) openAssign(id, d.dataset.drop);
     });
 
     // Sheet interactions
@@ -559,15 +713,25 @@
     $('eventForm').addEventListener('submit', saveEvent);
     $('evDelete').addEventListener('click', deleteEvent);
 
+    // Assign-task dialog
+    $('assignConfirm').addEventListener('click', confirmAssign);
+    $('assignRemove').addEventListener('click', removeAssign);
+    $('assignDays').addEventListener('click', (e) => {
+      const p = e.target.closest('.wday');
+      if (!p) return;
+      $('assignDays').querySelectorAll('.wday').forEach((x) => x.classList.remove('on'));
+      p.classList.add('on');
+    });
+
     // Generic close buttons / backdrops
     document.querySelectorAll('[data-close]').forEach((el) => {
       el.addEventListener('click', () => hideOverlay(el.dataset.close));
     });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        if (!$('editor').classList.contains('hidden')) hideOverlay('editor');
-        else if (!$('sheet').classList.contains('hidden')) hideOverlay('sheet');
-      }
+      if (e.key !== 'Escape') return;
+      if (!$('assignDialog').classList.contains('hidden')) hideOverlay('assignDialog');
+      else if (!$('editor').classList.contains('hidden')) hideOverlay('editor');
+      else if (!$('sheet').classList.contains('hidden')) hideOverlay('sheet');
     });
   }
 

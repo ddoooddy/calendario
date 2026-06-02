@@ -123,6 +123,37 @@
     </div>
   </div>
 
+  <!-- Assign task to a day + time slot -->
+  <div id="assignDialog" class="overlay hidden" aria-hidden="true">
+    <div class="overlay-backdrop" data-close="assignDialog"></div>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="assignDlgTitle">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <div>
+          <div class="eyebrow">Agendar tarea</div>
+          <h2 class="sheet-title" id="assignDlgTitle"><span id="assignTitle">Tarea</span></h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="assignDialog" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="form">
+        <div class="field">
+          <span>Día de la semana</span>
+          <div class="weekday-pills assign-days" id="assignDays"></div>
+        </div>
+        <div class="field-row">
+          <label class="field"><span>Hora inicio</span><input id="assignStart" type="time"></label>
+          <label class="field"><span>Hora fin (opcional)</span><input id="assignEnd" type="time"></label>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-danger" id="assignRemove" hidden>Quitar de la semana</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn btn-ghost" data-close="assignDialog">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="assignConfirm">Agendar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Install banner -->
   <div id="installBanner" class="install-banner hidden">
     <span>📲 Instalá Mi Agenda en tu teléfono</span>

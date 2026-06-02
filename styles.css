@@ -15,17 +15,20 @@
   --radius: 16px;
   --radius-sm: 11px;
 
-  /* category accents */
-  --cat-routine: #64748b;
-  --cat-school: #2563eb;
-  --cat-university: #7c3aed;
-  --cat-sport: #059669;
-  --cat-exam: #dc2626;
-  --cat-goal: #d97706;
-  --cat-personal: #0d9488;
+  /* category accents — vibrant & well separated around the hue wheel */
+  --cat-routine: #64748b;     /* slate  — daily filler */
+  --cat-school: #2563eb;      /* blue   */
+  --cat-university: #8b5cf6;  /* violet */
+  --cat-sport: #10b981;       /* emerald*/
+  --cat-exam: #ef4444;        /* red    */
+  --cat-goal: #f59e0b;        /* amber  */
+  --cat-personal: #06b6d4;    /* cyan   */
+  --task-accent: #6366f1;     /* indigo — scheduled tasks */
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -45,9 +48,10 @@
     --cat-school: #60a5fa;
     --cat-university: #a78bfa;
     --cat-sport: #34d399;
-    --cat-exam: #f87171;
+    --cat-exam: #fb7185;
     --cat-goal: #fbbf24;
-    --cat-personal: #2dd4bf;
+    --cat-personal: #22d3ee;
+    --task-accent: #818cf8;
   }
 }
 
@@ -213,10 +217,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
   place-items: center;
   border-radius: 50%;
 }
+.cell.today {
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  box-shadow: var(--shadow-sm), inset 0 0 0 1.6px color-mix(in srgb, var(--primary) 50%, transparent);
+}
 .cell.today .cell-date {
   background: var(--primary);
   color: var(--primary-ink);
-  font-weight: 700;
+  font-weight: 800;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 45%, transparent);
 }
 
 .dots {
@@ -274,6 +283,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
   overflow: hidden;
 }
 .week-day.today { box-shadow: var(--shadow-sm), 0 0 0 2px var(--primary); }
+.week-day.today .wd-head { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); }
+.hoy-badge {
+  display: inline-block;
+  background: var(--primary);
+  color: var(--primary-ink);
+  font-size: .6rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
 .wd-head {
   display: flex;
   align-items: center;
@@ -627,3 +649,98 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 .hidden { display: none !important; }
+
+/* ===================== View change animations ===================== */
+@keyframes viewNext { from { opacity: 0; transform: translateX(22px); } to { opacity: 1; transform: none; } }
+@keyframes viewPrev { from { opacity: 0; transform: translateX(-22px); } to { opacity: 1; transform: none; } }
+@keyframes viewFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.view.anim-next { animation: viewNext .3s cubic-bezier(.2, .8, .2, 1); }
+.view.anim-prev { animation: viewPrev .3s cubic-bezier(.2, .8, .2, 1); }
+.view.anim-fade { animation: viewFade .26s ease; }
+
+/* ===================== Overlay close animations ===================== */
+@keyframes fadeOut { to { opacity: 0; } }
+@keyframes slideDown { to { transform: translateY(100%); opacity: .4; } }
+@keyframes popOut { to { transform: scale(.96); opacity: 0; } }
+.overlay.closing .overlay-backdrop { animation: fadeOut .24s ease forwards; }
+.overlay.closing .sheet-card { animation: slideDown .26s cubic-bezier(.4, 0, 1, 1) forwards; }
+@media (min-width: 600px) {
+  .overlay.closing .sheet-card { animation: popOut .2s ease forwards; }
+}
+
+/* ===================== Week: unscheduled-task tray ===================== */
+.task-tray {
+  background: var(--surface);
+  border: 1px dashed color-mix(in srgb, var(--task-accent) 45%, var(--border));
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+.tray-head {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--text-soft);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tray-hint { font-weight: 500; color: var(--text-faint); font-size: .76rem; }
+.tray-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.task-chip {
+  border: none;
+  background: color-mix(in srgb, var(--task-accent) 16%, var(--surface));
+  color: var(--text);
+  border-left: 3px solid var(--task-accent);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-weight: 600;
+  font-size: .9rem;
+  box-shadow: var(--shadow-sm);
+  cursor: grab;
+  touch-action: manipulation;
+  transition: transform .08s, box-shadow .15s;
+}
+.task-chip.prio-alta {
+  background: color-mix(in srgb, var(--cat-exam) 16%, var(--surface));
+  border-left-color: var(--cat-exam);
+}
+.task-chip:active { transform: scale(.96); cursor: grabbing; }
+.task-chip.dragging { opacity: .45; }
+.week-day.drop-active {
+  box-shadow: var(--shadow-sm), 0 0 0 2px var(--primary);
+  outline: 2px dashed var(--primary);
+  outline-offset: 2px;
+}
+
+/* ===================== Scheduled task inside the agenda ===================== */
+.agenda-item.is-task { align-items: center; }
+.agenda-item.is-task::before { background: var(--task-accent); }
+.agenda-item.is-task .task-check { width: 22px; height: 22px; }
+.agenda-item.is-task.done .agenda-title { text-decoration: line-through; color: var(--text-faint); }
+.link-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: .8rem;
+  padding: 5px 8px;
+  border-radius: 8px;
+  align-self: center;
+}
+.link-btn:active { background: var(--surface-2); }
+
+/* ===================== Assign dialog: day pills ===================== */
+.assign-days .wday { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0; }
+.assign-days .wday small { font-size: .7rem; font-weight: 600; opacity: .75; }
+
+/* ===================== Respect reduced motion ===================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}

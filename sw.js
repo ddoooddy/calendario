@@ -1,5 +1,5 @@
 /* Service worker — offline app shell cache */
-const CACHE = 'mi-agenda-v1';
+const CACHE = 'mi-agenda-v2';
 const ASSETS = [
   './',
   './index.html',
