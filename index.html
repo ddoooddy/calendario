@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#4f46e5">
+  <title>Mi Agenda</title>
+  <meta name="description" content="Agenda y calendario personal. Funciona sin conexión.">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Mi Agenda">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="title-row">
+      <button id="todayBtn" class="pill-btn" type="button">Hoy</button>
+      <h1 id="periodLabel" class="period">—</h1>
+      <div class="nav">
+        <button id="prevBtn" class="icon-btn" type="button" aria-label="Anterior">‹</button>
+        <button id="nextBtn" class="icon-btn" type="button" aria-label="Siguiente">›</button>
+      </div>
+    </div>
+    <div class="view-switch" role="tablist" aria-label="Vista">
+      <button class="seg active" data-view="month" role="tab" type="button">Mes</button>
+      <button class="seg" data-view="week" role="tab" type="button">Semana</button>
+      <button class="seg" data-view="tasks" role="tab" type="button">Tareas</button>
+    </div>
+  </header>
+
+  <main id="view" class="view" aria-live="polite"></main>
+
+  <button id="fab" class="fab" type="button" aria-label="Agregar">+</button>
+
+  <!-- Day detail sheet -->
+  <div id="sheet" class="overlay hidden" aria-hidden="true">
+    <div class="overlay-backdrop" data-close="sheet"></div>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <div>
+          <div class="eyebrow" id="sheetEyebrow">—</div>
+          <h2 class="sheet-title" id="sheetTitle">Día</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="sheet" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="sheet-body" id="sheetBody"></div>
+      <div class="sheet-actions">
+        <button class="btn btn-soft" type="button" id="addTaskBtn">+ Tarea</button>
+        <button class="btn btn-primary" type="button" id="addEventBtn">+ Evento</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event editor -->
+  <div id="editor" class="overlay hidden" aria-hidden="true">
+    <div class="overlay-backdrop" data-close="editor"></div>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="editorTitle">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <h2 class="sheet-title" id="editorTitle">Nuevo evento</h2>
+        <button class="icon-btn" type="button" data-close="editor" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="eventForm" class="form">
+        <label class="field">
+          <span>Título</span>
+          <input id="evTitle" type="text" required placeholder="p. ej. Estudiar Precálculo" autocomplete="off" enterkeyhint="done">
+        </label>
+        <label class="field">
+          <span>Fecha</span>
+          <input id="evDate" type="date">
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Desde</span>
+            <input id="evStart" type="time">
+          </label>
+          <label class="field">
+            <span>Hasta</span>
+            <input id="evEnd" type="time">
+          </label>
+        </div>
+        <div class="switch-row">
+          <span>Repetir cada semana</span>
+          <label class="switch"><input id="evRepeat" type="checkbox"><span class="track"></span></label>
+        </div>
+        <div class="weekday-pills" id="weekdayPills" hidden></div>
+        <label class="field">
+          <span>Categoría</span>
+          <select id="evCategory">
+            <option value="personal">Personal</option>
+            <option value="routine">Rutina</option>
+            <option value="school">Colegio</option>
+            <option value="university">Facultad</option>
+            <option value="sport">Deporte</option>
+            <option value="exam">Examen / Deadline</option>
+            <option value="goal">Meta</option>
+          </select>
+        </label>
+        <div class="switch-row">
+          <span>Marcar como importante</span>
+          <label class="switch"><input id="evImportant" type="checkbox"><span class="track"></span></label>
+        </div>
+        <label class="field">
+          <span>Notas</span>
+          <textarea id="evNotes" rows="3" placeholder="Opcional"></textarea>
+        </label>
+        <div class="form-actions">
+          <button type="button" class="btn btn-danger" id="evDelete" hidden>Eliminar</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn btn-ghost" data-close="editor">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Install banner -->
+  <div id="installBanner" class="install-banner hidden">
+    <span>📲 Instalá Mi Agenda en tu teléfono</span>
+    <div class="install-actions">
+      <button id="installDismiss" class="btn btn-ghost btn-sm" type="button">Ahora no</button>
+      <button id="installBtn" class="btn btn-primary btn-sm" type="button">Instalar</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <noscript>Esta aplicación necesita JavaScript activado.</noscript>
+
+  <script src="app.js"></script>
+</body>
+</html>
