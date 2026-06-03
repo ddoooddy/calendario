@@ -413,6 +413,30 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .task-del:active { background: var(--surface-2); }
 
+/* priority flag toggle */
+.prio-toggle {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  width: 38px; height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  transition: color .15s, background .15s, transform .08s;
+}
+.prio-toggle svg { display: block; }
+.prio-toggle:active { transform: scale(.86); background: var(--surface-2); }
+
+/* high-priority task: filled red flag + red rail + soft tint */
+.task.is-prio {
+  background: color-mix(in srgb, var(--cat-exam) 8%, var(--surface));
+  box-shadow: var(--shadow-sm), inset 3px 0 0 var(--cat-exam);
+}
+.task.is-prio .prio-toggle { color: var(--cat-exam); }
+.task.is-prio .prio-toggle svg path { fill: currentColor; }
+.agenda-item.is-task.is-prio::before { background: var(--cat-exam); }
+
 .add-row {
   display: flex;
   gap: 8px;

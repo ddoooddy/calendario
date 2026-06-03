@@ -160,8 +160,10 @@
     });
     return list;
   }
+  const prioRank = (t) => (t.priority === 'alta' ? 0 : t.priority === 'baja' ? 2 : 1);
   const tasksForISO = (iso) => state.tasks.filter((t) => t.date === iso);
-  const backlogTasks = () => state.tasks.filter((t) => !t.date);
+  // Recurring/backlog tasks: high priority floats to the top (stable otherwise).
+  const backlogTasks = () => state.tasks.filter((t) => !t.date).sort((a, b) => prioRank(a) - prioRank(b));
   const datedTasks = () => state.tasks.filter((t) => t.date).sort((a, b) =>
     a.date === b.date ? (a.start || '~').localeCompare(b.start || '~') : a.date.localeCompare(b.date));
   const withinWeek = (iso, weekStart) => iso >= toISO(weekStart) && iso <= toISO(addDays(weekStart, 6));
@@ -213,7 +215,7 @@
     const time = t.start
       ? `<span class="agenda-time">${esc(t.start)}${t.end ? `<span class="to">${esc(t.end)}</span>` : ''}</span>`
       : '<span class="agenda-time">Tarea</span>';
-    return `<div class="agenda-item is-task ${t.done ? 'done' : ''}">
+    return `<div class="agenda-item is-task ${t.done ? 'done' : ''} ${t.priority === 'alta' ? 'is-prio' : ''}">
       <input class="task-check" type="checkbox" data-toggle="${t.id}" ${t.done ? 'checked' : ''} aria-label="Completar tarea">
       ${time}
       <span class="agenda-body"><span class="agenda-title">${esc(t.title)}</span></span>
@@ -303,18 +305,23 @@
     viewEl.innerHTML = html;
   }
 
+  // Outlined flag (filled via CSS when the task is high-priority).
+  const FLAG_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>';
+
   function taskHTML(t) {
+    const alta = t.priority === 'alta';
     const meta = [];
     if (t.date) meta.push(shortDate(t.date) + (t.start ? ` · ${esc(t.start)}${t.end ? '–' + esc(t.end) : ''}` : ''));
-    if (t.priority === 'alta') meta.push('<span class="badge prio-alta">Prioridad alta</span>');
+    if (alta) meta.push('<span class="badge prio-alta">Alta</span>');
     else if (t.priority === 'baja') meta.push('<span class="badge prio-baja">Baja</span>');
     if (t.notes) meta.push(esc(t.notes));
-    return `<div class="task ${t.done ? 'done' : ''}">
+    return `<div class="task ${t.done ? 'done' : ''} ${alta ? 'is-prio' : ''}">
       <input class="task-check" type="checkbox" data-toggle="${t.id}" ${t.done ? 'checked' : ''} aria-label="Completar tarea">
       <span class="task-main">
         <span class="task-title">${esc(t.title)}</span>
         ${meta.length ? `<span class="task-meta">${meta.join('')}</span>` : ''}
       </span>
+      <button class="prio-toggle" data-prio="${t.id}" aria-pressed="${alta}" title="${alta ? 'Quitar prioridad alta' : 'Marcar prioridad alta'}" aria-label="${alta ? 'Quitar prioridad alta' : 'Marcar prioridad alta'}">${FLAG_SVG}</button>
       <button class="task-del" data-deltask="${t.id}" aria-label="Eliminar tarea">🗑</button>
     </div>`;
   }
@@ -474,6 +481,12 @@
     const t = state.tasks.find((x) => x.id === id);
     if (t) { t.done = !t.done; saveState(); }
   }
+  function togglePriority(id) {
+    const t = state.tasks.find((x) => x.id === id);
+    if (!t) return;
+    t.priority = t.priority === 'alta' ? 'normal' : 'alta';
+    saveState();
+  }
   function deleteTask(id) {
     state.tasks = state.tasks.filter((x) => x.id !== id);
     saveState();
@@ -619,9 +632,11 @@
       const reset = e.target.closest('[data-reset]');
       const chip = e.target.closest('[data-chip]');
       const assign = e.target.closest('[data-assign]');
+      const prio = e.target.closest('[data-prio]');
 
       if (edit) { const ev = state.events.find((x) => x.id === edit.dataset.edit); if (ev) openEditor(ev); return; }
       if (add) { selectedISO = add.dataset.add; openEditor(null, add.dataset.add); return; }
+      if (prio) { togglePriority(prio.dataset.prio); render(); return; }
       if (delT) { deleteTask(delT.dataset.deltask); render(); return; }
       if (addBl) {
         const inp = $('addBacklog');
@@ -683,7 +698,9 @@
       const edit = e.target.closest('[data-edit]');
       const delT = e.target.closest('[data-deltask]');
       const addDay = e.target.closest('[data-adddaytask]');
+      const prio = e.target.closest('[data-prio]');
       if (edit) { const ev = state.events.find((x) => x.id === edit.dataset.edit); if (ev) openEditor(ev); return; }
+      if (prio) { togglePriority(prio.dataset.prio); openSheet(selectedISO); render(); return; }
       if (delT) { deleteTask(delT.dataset.deltask); openSheet(selectedISO); return; }
       if (addDay) {
         const inp = $('addDayTask');
